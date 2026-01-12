@@ -178,3 +178,38 @@ export async function importCsvBytes(
     filename,
   });
 }
+
+// ===== Subscription Types =====
+
+export interface Subscription {
+  id: number | null;
+  account_id: number;
+  payee_pattern: string;
+  amount: number;
+  frequency: string;
+  last_charge_date: string | null;
+  next_charge_date: string | null;
+  is_active: boolean;
+  category_id: number | null;
+  confidence: number;
+  transaction_ids: number[];
+}
+
+// ===== Subscription API =====
+
+export async function detectSubscriptions(accountId: number): Promise<Subscription[]> {
+  return invoke<Subscription[]>("detect_subscriptions", { accountId });
+}
+
+export async function getSubscriptions(accountId: number): Promise<Subscription[]> {
+  return invoke<Subscription[]>("get_subscriptions", { accountId });
+}
+
+export async function saveSubscription(subscription: Subscription): Promise<number> {
+  return invoke<number>("save_subscription", { subscription });
+}
+
+export async function dismissSubscription(id: number): Promise<number> {
+  return invoke<number>("dismiss_subscription", { id });
+}
+

@@ -12,6 +12,7 @@ import {
 import {
   LayoutDashboard,
   Receipt,
+  Repeat,
   Tags,
   Upload,
   Wallet,
@@ -45,10 +46,16 @@ const mainNav: NavItem[] = [
     shortcut: "⌘3",
   },
   {
+    title: "Subscriptions",
+    icon: Repeat,
+    href: "/subscriptions",
+    shortcut: "⌘4",
+  },
+  {
     title: "Categories",
     icon: Tags,
     href: "/categories",
-    shortcut: "⌘4",
+    shortcut: "⌘5",
   },
 ];
 

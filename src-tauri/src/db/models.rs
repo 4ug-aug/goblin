@@ -64,3 +64,20 @@ pub struct ImportResult {
     pub imported: usize,
     pub skipped_duplicates: usize,
 }
+
+/// Detected recurring payment / subscription
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subscription {
+    pub id: Option<i64>,
+    pub account_id: i64,
+    pub payee_pattern: String,
+    pub amount: i64,
+    pub frequency: String,
+    pub last_charge_date: Option<String>,
+    pub next_charge_date: Option<String>,
+    pub is_active: bool,
+    pub category_id: Option<i64>,
+    pub confidence: f64,
+    #[serde(default)]
+    pub transaction_ids: Vec<i64>,
+}

@@ -17,6 +17,13 @@ export function formatAmount(amount: number, showCurrency = true): string {
 }
 
 /**
+ * Format currency amount (alias for formatAmount for cleaner imports)
+ */
+export function formatCurrency(amount: number, showCurrency = true): string {
+  return formatAmount(amount, showCurrency);
+}
+
+/**
  * Format amount with sign prefix for display
  * Positive amounts get "+" prefix, negative are shown as-is
  */

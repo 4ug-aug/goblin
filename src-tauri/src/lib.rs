@@ -1,7 +1,7 @@
 mod db;
 
-use db::models::{Account, Category, ImportResult, TransactionWithCategory};
-use db::{accounts, categories, import, transactions, Database};
+use db::models::{Account, Category, ImportResult, TransactionWithCategory, Subscription};
+use db::{accounts, categories, import, transactions, subscriptions, subscription_engine, Database};
 use tauri::{Manager, State};
 
 // === Account Commands ===
@@ -161,6 +161,32 @@ fn import_csv_bytes(
     import::import_csv_bytes(&conn, &bytes, account_id, &filename)
 }
 
+// === Subscription Commands ===
+
+#[tauri::command]
+fn detect_subscriptions(db: State<Database>, account_id: i64) -> Result<Vec<Subscription>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    subscription_engine::detect_subscriptions(&conn, account_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_subscriptions(db: State<Database>, account_id: i64) -> Result<Vec<Subscription>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    subscriptions::get_by_account(&conn, account_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_subscription(db: State<Database>, subscription: Subscription) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    subscriptions::create(&conn, &subscription).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn dismiss_subscription(db: State<Database>, id: i64) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    subscriptions::dismiss(&conn, id).map_err(|e| e.to_string())
+}
+
 // === App Entry Point ===
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -199,6 +225,11 @@ pub fn run() {
             // Import
             import_csv_file,
             import_csv_bytes,
+            // Subscriptions
+            detect_subscriptions,
+            get_subscriptions,
+            save_subscription,
+            dismiss_subscription,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

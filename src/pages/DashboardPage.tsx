@@ -2,10 +2,10 @@ import { Donut } from "@/components/charts/donut";
 import { StackedBar } from "@/components/charts/stacked-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiSectionCard } from "@/components/ui/multi-section";
-import { getAccounts, getSpendingByCategory, getTransactions, getTransactionsByDateRange, type Account, type SpendingByCategory, type TransactionWithCategory } from "@/lib/api";
-import { formatAmount } from "@/lib/format";
+import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type SpendingByCategory, type Subscription, type TransactionWithCategory } from "@/lib/api";
+import { formatAmount, formatCurrency } from "@/lib/format";
 import { addDays, format, startOfToday, subMonths } from "date-fns";
-import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { CalendarCheck, Repeat, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const trendConfig = {
@@ -23,6 +23,7 @@ export function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
   const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +75,16 @@ export function DashboardPage() {
           setTransactions(allTxs);
           setTotalBalance(totalBal);
           setSpendingByCategory(Object.entries(allSpendingByCat));
+
+          // Load subscriptions for all accounts
+          const allSubs: Subscription[] = [];
+          for (const acc of accs) {
+            if (acc.id) {
+              const subs = await getSubscriptions(acc.id);
+              allSubs.push(...subs);
+            }
+          }
+          setSubscriptions(allSubs);
         }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
@@ -148,6 +159,28 @@ export function DashboardPage() {
       .filter(tx => tx.date.startsWith(thisMonth) && tx.amount > 0)
       .reduce((acc, tx) => acc + tx.amount, 0);
   }, [transactions, today]);
+
+  // Calculate monthly subscription cost
+  const monthlySubscriptionCost = useMemo(() => {
+    return subscriptions.reduce((total, sub) => {
+      const amount = Math.abs(sub.amount);
+      switch (sub.frequency) {
+        case "weekly": return total + amount * 4.33;
+        case "biweekly": return total + amount * 2.17;
+        case "monthly": return total + amount;
+        case "yearly": return total + amount / 12;
+        default: return total + amount;
+      }
+    }, 0);
+  }, [subscriptions]);
+
+  // Get upcoming subscription charges (sorted by next_charge_date)
+  const upcomingCharges = useMemo(() => {
+    return subscriptions
+      .filter(sub => sub.next_charge_date)
+      .sort((a, b) => (a.next_charge_date || "").localeCompare(b.next_charge_date || ""))
+      .slice(0, 4);
+  }, [subscriptions]);
 
   const sections = [
     {
@@ -239,6 +272,54 @@ export function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Subscriptions Row */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Monthly Subscriptions
+            </CardTitle>
+            <Repeat className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono-numbers text-expense">
+              {formatCurrency(monthlySubscriptionCost)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {subscriptions.length} active subscriptions
+            </p>
+          </CardContent>
+        </Card>
+
+        {upcomingCharges.length > 0 && (
+          <Card className="md:col-span-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <CalendarCheck className="h-4 w-4" />
+                Upcoming Charges
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-4">
+                {upcomingCharges.map((sub, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                    <div className="truncate">
+                      <p className="text-sm font-medium truncate">{sub.payee_pattern}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {sub.next_charge_date ? format(new Date(sub.next_charge_date), "MMM d") : "Unknown"}
+                      </p>
+                    </div>
+                    <span className="text-sm font-mono text-expense ml-2">
+                      {formatCurrency(sub.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

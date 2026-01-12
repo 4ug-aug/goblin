@@ -4,6 +4,8 @@ pub mod accounts;
 pub mod categories;
 pub mod transactions;
 pub mod import;
+pub mod subscriptions;
+pub mod subscription_engine;
 
 use rusqlite::Connection;
 use std::path::PathBuf;
