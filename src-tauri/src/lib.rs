@@ -115,6 +115,16 @@ fn update_transaction_category(
 }
 
 #[tauri::command]
+fn update_batch_categories(
+    db: State<Database>,
+    transaction_ids: Vec<i64>,
+    category_id: Option<i64>,
+) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    transactions::update_batch_categories(&conn, transaction_ids, category_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn delete_transaction(db: State<Database>, id: i64) -> Result<usize, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     transactions::delete(&conn, id).map_err(|e| e.to_string())
@@ -183,6 +193,7 @@ pub fn run() {
             get_transactions_by_date_range,
             get_spending_by_category,
             update_transaction_category,
+            update_batch_categories,
             delete_transaction,
             delete_transactions_by_account,
             // Import

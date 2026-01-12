@@ -1,38 +1,65 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import type { TransactionWithCategory } from "@/lib/api";
+import { getCategories, updateBatchCategories, type Category, type TransactionWithCategory } from "@/lib/api";
+import { formatCategoryPath } from "@/lib/format";
 import {
-    flexRender,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    getSortedRowModel,
-    useReactTable,
-    type ColumnFiltersState,
-    type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnFiltersState,
+  type SortingState,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from "lucide-react";
-import { useState } from "react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { transactionColumns } from "./transaction-columns";
 
 interface TransactionTableProps {
   transactions: TransactionWithCategory[];
   loading?: boolean;
+  onRefresh?: () => void;
 }
 
-export function TransactionTable({ transactions, loading }: TransactionTableProps) {
+export function TransactionTable({ transactions, loading, onRefresh }: TransactionTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [rowSelection, setRowSelection] = useState({});
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("none");
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const data = await getCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+      }
+    }
+    loadCategories();
+  }, []);
 
   const table = useReactTable({
     data: transactions,
@@ -44,11 +71,20 @@ export function TransactionTable({ transactions, loading }: TransactionTableProp
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
     globalFilterFn: "includesString",
+    filterFns: {
+      categoryFilter: (row, columnId, filterValue) => {
+        if (!filterValue || filterValue.length === 0) return true;
+        const value = row.getValue(columnId) as string;
+        return filterValue.includes(value);
+      },
+    },
     state: {
       sorting,
       columnFilters,
       globalFilter,
+      rowSelection,
     },
     initialState: {
       pagination: {
@@ -56,6 +92,29 @@ export function TransactionTable({ transactions, loading }: TransactionTableProp
       },
     },
   });
+
+  const selectedRows = table.getFilteredSelectedRowModel().rows;
+  const hasSelection = selectedRows.length > 0;
+
+  const handleBatchCategorize = async () => {
+    if (!hasSelection || updating) return;
+    
+    setUpdating(true);
+    try {
+      const transactionIds = selectedRows.map(row => row.original.id!).filter(id => id !== null);
+      const categoryId = selectedCategoryId === "none" ? null : parseInt(selectedCategoryId);
+      
+      await updateBatchCategories(transactionIds, categoryId);
+      toast.success(`Updated ${transactionIds.length} transactions`);
+      setRowSelection({});
+      onRefresh?.();
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
+      toast.error("Failed to update transactions");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -71,9 +130,9 @@ export function TransactionTable({ transactions, loading }: TransactionTableProp
   }
 
   return (
-    <div className="space-y-4">
-      {/* Search & Filters */}
-      <div className="flex items-center gap-2">
+    <div className="space-y-4 relative">
+      {/* Search & Bulk Actions */}
+      <div className="flex items-center justify-start gap-2 h-9">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -83,10 +142,55 @@ export function TransactionTable({ transactions, loading }: TransactionTableProp
             className="pl-9 h-9"
           />
         </div>
+
+        <div className="flex items-center gap-2">
+          {!hasSelection && (
+            <MultiSelectCombobox
+              placeholder="Filter categories"
+              options={categories.map((cat) => ({
+                value: cat.name,
+                label: formatCategoryPath(cat.name, categories.find(p => p.id === cat.parent_id)?.name) || cat.name,
+                group: categories.find(p => p.id === cat.parent_id)?.name || "Top Level"
+              }))}
+              selected={(table.getColumn("category_name")?.getFilterValue() as string[]) || []}
+              onChange={(value) => table.getColumn("category_name")?.setFilterValue(value.length ? value : undefined)}
+            />
+          )}
+        </div>
+
+        {hasSelection && (
+          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+            <span className="text-sm font-medium text-muted-foreground mr-2">
+              {selectedRows.length} selected
+            </span>
+            
+            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Uncategorized</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id?.toString() || ""}>
+                    {formatCategoryPath(cat.name, categories.find(p => p.id === cat.parent_id)?.name)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button size="sm" onClick={handleBatchCategorize} disabled={updating}>
+              Apply
+            </Button>
+            
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setRowSelection({})}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -113,12 +217,13 @@ export function TransactionTable({ transactions, loading }: TransactionTableProp
               table.getRowModel().rows.map((row) => (
                 <TableRow 
                   key={row.id}
-                  className="data-[state=selected]:bg-muted hover:bg-muted/50 transition-colors"
+                  className="data-[state=selected]:bg-muted/60 hover:bg-muted/40 transition-colors"
+                  data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className="py-2.5 px-4"
+                      className="py-2 px-4"
                       style={{ width: cell.column.getSize() }}
                     >
                       {flexRender(

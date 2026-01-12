@@ -131,6 +131,16 @@ export async function updateTransactionCategory(
   });
 }
 
+export async function updateBatchCategories(
+  transactionIds: number[],
+  categoryId: number | null
+): Promise<number> {
+  return invoke<number>("update_batch_categories", {
+    transactionIds,
+    categoryId,
+  });
+}
+
 export async function deleteTransaction(id: number): Promise<number> {
   return invoke<number>("delete_transaction", { id });
 }

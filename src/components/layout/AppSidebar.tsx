@@ -81,7 +81,7 @@ export function AppSidebar({ currentPath, onNavigate, onImport }: AppSidebarProp
                 <SidebarMenuButton
                   onClick={onImport}
                   tooltip="Import CSV (⌘I)"
-                  className="bg-primary/10 hover:bg-primary/20 text-primary"
+                  className="hover:bg-primary/20 text-primary"
                 >
                   <Upload className="h-4 w-4" />
                   <span>Import</span>

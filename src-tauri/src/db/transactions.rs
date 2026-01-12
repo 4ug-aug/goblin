@@ -142,6 +142,19 @@ pub fn update_category(
     )
 }
 
+pub fn update_batch_categories(
+    conn: &Connection,
+    transaction_ids: Vec<i64>,
+    category_id: Option<i64>,
+) -> Result<usize, rusqlite::Error> {
+    let mut stmt = conn.prepare("UPDATE transactions SET category_id = ?1 WHERE id = ?2")?;
+    let mut count = 0;
+    for id in transaction_ids {
+        count += stmt.execute(params![category_id, id])?;
+    }
+    Ok(count)
+}
+
 pub fn delete(conn: &Connection, id: i64) -> Result<usize, rusqlite::Error> {
     conn.execute("DELETE FROM transactions WHERE id = ?1", params![id])
 }

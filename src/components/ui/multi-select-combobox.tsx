@@ -1,13 +1,12 @@
 import {
-    Command,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { X } from "lucide-react"
 import * as React from "react"
 import { Badge } from "./badge"
 
@@ -64,23 +63,31 @@ export function MultiSelectCombobox({
   }, {} as Record<string, Option[]>)
 
   return (
-    <div className="grid gap-2">
+    <div className="flex items-center gap-2">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div
             role="combobox"
             aria-expanded={open}
             className={cn(
-              "flex min-h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              "flex h-9 w-fit min-w-[140px] items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer hover:bg-accent/50 transition-colors",
               !selected.length && "text-muted-foreground"
             )}
           >
-            {selected.length > 0
-              ? `${selected.length} selected`
-              : placeholder}
+            <div className="flex items-center gap-2">
+              {selected.length > 0 ? (
+                <div className="flex gap-1">
+                  <Badge variant="secondary" className="rounded-sm px-1 font-normal h-5">
+                    {selected.length} selected
+                  </Badge>
+                </div>
+              ) : (
+                placeholder
+              )}
+            </div>
           </div>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <PopoverContent className="w-[200px] p-0" align="start">
           <Command onKeyDown={handleKeyDown}>
             <CommandInput
               placeholder="Search..."
@@ -105,7 +112,19 @@ export function MultiSelectCombobox({
                               : "opacity-50 [&_svg]:invisible"
                           )}
                         >
-                          <X className={cn("h-3 w-3")} />
+                          <svg
+                            className={cn("h-3 w-3")}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
                         </div>
                         {option.label}
                       </CommandItem>
@@ -130,32 +149,6 @@ export function MultiSelectCombobox({
           </Command>
         </PopoverContent>
       </Popover>
-      <div className="flex flex-wrap gap-1">
-        {selected.map((item) => {
-          const option = options.find((o) => o.value === item)
-          return (
-            <Badge key={item} variant="secondary" className="gap-1 px-2 py-1">
-              {option?.label || item}
-              <button
-                type="button"
-                className="ml-1 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleUnselect(item)
-                  }
-                }}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
-                onClick={() => handleUnselect(item)}
-              >
-                <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-              </button>
-            </Badge>
-          )
-        })}
-      </div>
     </div>
   )
 }

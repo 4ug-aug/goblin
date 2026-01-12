@@ -28,24 +28,25 @@ export function TransactionsPage() {
   }, []);
 
   // Load transactions when account changes
-  useEffect(() => {
-    async function loadTransactions() {
-      if (!selectedAccountId) {
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const data = await getTransactions(selectedAccountId);
-        setTransactions(data);
-      } catch (error) {
-        console.error("Failed to load transactions:", error);
-      } finally {
-        setLoading(false);
-      }
+  const loadTransactions = async () => {
+    if (!selectedAccountId) {
+      setTransactions([]);
+      setLoading(false);
+      return;
     }
+
+    setLoading(true);
+    try {
+      const data = await getTransactions(selectedAccountId);
+      setTransactions(data);
+    } catch (error) {
+      console.error("Failed to load transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadTransactions();
   }, [selectedAccountId]);
 
@@ -80,6 +81,7 @@ export function TransactionsPage() {
       <TransactionTable
         transactions={transactions}
         loading={loading}
+        onRefresh={loadTransactions}
       />
     </div>
   );

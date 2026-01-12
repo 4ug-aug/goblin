@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { TransactionWithCategory } from "@/lib/api";
 import { formatAmount, formatCategoryPath, formatDateCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,29 @@ import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, Check } from "lucide-react";
 
 export const transactionColumns: ColumnDef<TransactionWithCategory>[] = [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+    size: 40,
+  },
   {
     accessorKey: "date",
     header: ({ column }) => {
@@ -65,6 +89,7 @@ export const transactionColumns: ColumnDef<TransactionWithCategory>[] = [
         </Button>
       );
     },
+    filterFn: "categoryFilter" as any,
     cell: ({ row }) => {
       const categoryPath = formatCategoryPath(
         row.original.category_name,
