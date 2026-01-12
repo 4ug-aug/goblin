@@ -146,6 +146,10 @@ pub fn delete(conn: &Connection, id: i64) -> Result<usize, rusqlite::Error> {
     conn.execute("DELETE FROM transactions WHERE id = ?1", params![id])
 }
 
+pub fn delete_by_account(conn: &Connection, account_id: i64) -> Result<usize, rusqlite::Error> {
+    conn.execute("DELETE FROM transactions WHERE account_id = ?1", params![account_id])
+}
+
 fn map_transaction_with_category(
     row: &rusqlite::Row,
 ) -> Result<TransactionWithCategory, rusqlite::Error> {

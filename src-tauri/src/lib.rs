@@ -120,6 +120,12 @@ fn delete_transaction(db: State<Database>, id: i64) -> Result<usize, String> {
     transactions::delete(&conn, id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn delete_transactions_by_account(db: State<Database>, account_id: i64) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    transactions::delete_by_account(&conn, account_id).map_err(|e| e.to_string())
+}
+
 // === Import Commands ===
 
 #[tauri::command]
@@ -133,12 +139,26 @@ fn import_csv_file(
     import::import_csv(&conn, &csv_content, account_id, &filename)
 }
 
+/// Import CSV from raw bytes - handles encoding detection automatically
+#[tauri::command]
+fn import_csv_bytes(
+    db: State<Database>,
+    bytes: Vec<u8>,
+    account_id: i64,
+    filename: String,
+) -> Result<ImportResult, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    import::import_csv_bytes(&conn, &bytes, account_id, &filename)
+}
+
 // === App Entry Point ===
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let db = Database::new(app.handle())
                 .map_err(|e| format!("Failed to initialize database: {}", e))?;
@@ -164,8 +184,10 @@ pub fn run() {
             get_spending_by_category,
             update_transaction_category,
             delete_transaction,
+            delete_transactions_by_account,
             // Import
             import_csv_file,
+            import_csv_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

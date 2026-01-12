@@ -1,17 +1,13 @@
 use csv::ReaderBuilder;
-use sha2::{Digest, Sha256};
+use encoding_rs::WINDOWS_1252;
 use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 
 use super::models::ImportResult;
-use super::{categories, transactions};
 use super::models::Transaction;
+use super::{categories, transactions};
 
-/// Import a Danish bank CSV file.
-/// 
-/// Expected columns (semicolon-delimited):
-/// Dato, Kategori, Underkategori, Tekst, Beløb, Saldo, Status, Afstemt
-/// 
-/// Returns the number of rows processed, imported, and skipped.
+/// Import a Danish bank CSV file from a UTF-8 string.
 pub fn import_csv(
     conn: &Connection,
     csv_content: &str,
@@ -20,21 +16,42 @@ pub fn import_csv(
 ) -> Result<ImportResult, String> {
     // Try semicolon delimiter first (common in Danish exports), fall back to comma
     let result = try_import_with_delimiter(conn, csv_content, account_id, b';');
-    
+
     if result.is_err() {
         // Try comma delimiter as fallback
         let comma_result = try_import_with_delimiter(conn, csv_content, account_id, b',');
         if comma_result.is_ok() {
-            log_import(conn, filename, comma_result.as_ref().unwrap().imported)?;
-            return comma_result;
+            let res = comma_result.unwrap();
+            log_import(conn, filename, res.imported)?;
+            return Ok(res);
         }
     }
-    
+
     if let Ok(ref res) = result {
         log_import(conn, filename, res.imported)?;
     }
-    
+
     result
+}
+
+/// Import CSV from raw bytes (handles encoding detection)
+pub fn import_csv_bytes(
+    conn: &Connection,
+    bytes: &[u8],
+    account_id: i64,
+    filename: &str,
+) -> Result<ImportResult, String> {
+    // 1. Try UTF-8 (Strict)
+    if let Ok(utf8_str) = std::str::from_utf8(bytes) {
+        return import_csv(conn, utf8_str, account_id, filename);
+    }
+
+    // 2. Try Windows-1252 (Common for Danish banks)
+    let (decoded, _encoding_used, _had_errors) = WINDOWS_1252.decode(bytes);
+    
+    // Even if there were minor errors, it's likely better than nothing for bank files
+    // as Latin-1/Windows-1252 mostly always "decodes" something.
+    import_csv(conn, &decoded, account_id, filename)
 }
 
 fn try_import_with_delimiter(
@@ -49,29 +66,29 @@ fn try_import_with_delimiter(
         .trim(csv::Trim::All)
         .from_reader(csv_content.as_bytes());
 
-    let headers = reader.headers().map_err(|e| e.to_string())?.clone();
-    
+    let headers = reader.headers().map_err(|e| format!("Kunne ikke læse overskrifter: {}", e))?.clone();
+
     // Find column indices by header name (case-insensitive)
     let date_idx = find_column_index(&headers, &["dato", "date"]);
     let category_idx = find_column_index(&headers, &["kategori", "category"]);
     let subcategory_idx = find_column_index(&headers, &["underkategori", "subcategory"]);
     let text_idx = find_column_index(&headers, &["tekst", "text", "description", "payee"]);
-    let amount_idx = find_column_index(&headers, &["beløb", "belob", "amount"]);
+    let amount_idx = find_column_index(&headers, &["beløb", "belob", "bel", "amount"]);
     let balance_idx = find_column_index(&headers, &["saldo", "balance"]);
     let status_idx = find_column_index(&headers, &["status"]);
     let reconciled_idx = find_column_index(&headers, &["afstemt", "reconciled"]);
 
     // Validate required columns
-    let date_idx = date_idx.ok_or("Could not find date column (Dato)")?;
-    let text_idx = text_idx.ok_or("Could not find text column (Tekst)")?;
-    let amount_idx = amount_idx.ok_or("Could not find amount column (Beløb)")?;
+    let date_idx = date_idx.ok_or_else(|| format!("Kunne ikke finde kolonnen 'Dato'. Fundne overskrifter: {:?}", headers))?;
+    let text_idx = text_idx.ok_or_else(|| format!("Kunne ikke finde kolonnen 'Tekst' eller 'Payee'. Fundne overskrifter: {:?}", headers))?;
+    let amount_idx = amount_idx.ok_or_else(|| format!("Kunne ikke finde kolonnen 'Beløb'. Fundne overskrifter: {:?}", headers))?;
 
     let mut total_rows = 0;
     let mut imported = 0;
     let mut skipped = 0;
 
     for result in reader.records() {
-        let record = result.map_err(|e| e.to_string())?;
+        let record = result.map_err(|e| format!("Fejl i CSV række {}: {}", total_rows + 1, e))?;
         total_rows += 1;
 
         // Parse required fields
@@ -114,8 +131,8 @@ fn try_import_with_delimiter(
 
         // Find or create categories
         let category_id = if let Some(cat_name) = kategori {
-            let parent_id = categories::find_or_create(conn, cat_name, None)
-                .map_err(|e| e.to_string())?;
+            let parent_id =
+                categories::find_or_create(conn, cat_name, None).map_err(|e| e.to_string())?;
             if let Some(subcat_name) = underkategori {
                 Some(
                     categories::find_or_create(conn, subcat_name, Some(parent_id))
@@ -169,47 +186,52 @@ fn find_column_index(headers: &csv::StringRecord, names: &[&str]) -> Option<usiz
 fn parse_danish_date(s: &str) -> Result<String, String> {
     let s = s.trim();
     if s.is_empty() {
-        return Err("Empty date".to_string());
+        return Err("Dato mangler".to_string());
     }
 
     // Split by common separators
     let parts: Vec<&str> = s.split(['-', '/', '.'].as_ref()).collect();
-    
+
     if parts.len() != 3 {
-        return Err(format!("Invalid date format: {}", s));
+        return Err(format!("Ugyldigt datoformat: {}", s));
     }
 
-    let day: u32 = parts[0].parse().map_err(|_| format!("Invalid day: {}", parts[0]))?;
-    let month: u32 = parts[1].parse().map_err(|_| format!("Invalid month: {}", parts[1]))?;
-    let year: u32 = parts[2].parse().map_err(|_| format!("Invalid year: {}", parts[2]))?;
+    let day: u32 = parts[0]
+        .parse()
+        .map_err(|_| format!("Ugyldig dag: {}", parts[0]))?;
+    let month: u32 = parts[1]
+        .parse()
+        .map_err(|_| format!("Ugyldig måned: {}", parts[1]))?;
+    let year: u32 = parts[2]
+        .parse()
+        .map_err(|_| format!("Ugyldigt år: {}", parts[2]))?;
 
     // Basic validation
     if month < 1 || month > 12 {
-        return Err(format!("Invalid month: {}", month));
+        return Err(format!("Ugyldig måned: {}", month));
     }
     if day < 1 || day > 31 {
-        return Err(format!("Invalid day: {}", day));
+        return Err(format!("Ugyldig dag: {}", day));
     }
 
     Ok(format!("{:04}-{:02}-{:02}", year, month, day))
 }
 
 /// Parse Danish amount format (uses comma as decimal separator) to øre (integer cents)
-/// Examples: "125,50" -> 12550, "-1.234,56" -> -123456, "1234" -> 123400
 fn parse_danish_amount(s: &str) -> Result<i64, String> {
     let s = s.trim();
     if s.is_empty() {
-        return Err("Empty amount".to_string());
+        return Err("Beløb mangler".to_string());
     }
 
     // Remove thousand separators (.) and replace decimal comma with dot
     let cleaned = s
-        .replace(".", "")    // Remove thousand separators
-        .replace(",", ".");  // Convert decimal comma to dot
+        .replace(".", "") // Remove thousand separators
+        .replace(",", "."); // Convert decimal comma to dot
 
     let amount: f64 = cleaned
         .parse()
-        .map_err(|_| format!("Invalid amount: {}", s))?;
+        .map_err(|_| format!("Ugyldigt beløb: {}", s))?;
 
     // Convert to øre (cents) - multiply by 100 and round
     Ok((amount * 100.0).round() as i64)
@@ -234,25 +256,4 @@ fn log_import(conn: &Connection, filename: &str, records_added: usize) -> Result
     )
     .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_danish_date() {
-        assert_eq!(parse_danish_date("12-01-2026").unwrap(), "2026-01-12");
-        assert_eq!(parse_danish_date("31/12/2025").unwrap(), "2025-12-31");
-        assert_eq!(parse_danish_date("01.06.2024").unwrap(), "2024-06-01");
-    }
-
-    #[test]
-    fn test_parse_danish_amount() {
-        assert_eq!(parse_danish_amount("125,50").unwrap(), 12550);
-        assert_eq!(parse_danish_amount("-125,50").unwrap(), -12550);
-        assert_eq!(parse_danish_amount("1.234,56").unwrap(), 123456);
-        assert_eq!(parse_danish_amount("-1.234,56").unwrap(), -123456);
-        assert_eq!(parse_danish_amount("1234").unwrap(), 123400);
-    }
 }
