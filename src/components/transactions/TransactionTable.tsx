@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import {
@@ -29,8 +30,10 @@ import {
   type ColumnFiltersState,
   type SortingState,
 } from "@tanstack/react-table";
+import { format } from "date-fns";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 import { transactionColumns } from "./transaction-columns";
 
@@ -48,6 +51,7 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("none");
   const [updating, setUpdating] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     async function loadCategories() {
@@ -61,8 +65,18 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
     loadCategories();
   }, []);
 
+  // Filter transactions by date range
+  const filteredTransactions = useMemo(() => {
+    if (!dateRange?.from) return transactions;
+    
+    const startStr = format(dateRange.from, "yyyy-MM-dd");
+    const endStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
+    
+    return transactions.filter(tx => tx.date >= startStr && tx.date <= endStr);
+  }, [transactions, dateRange]);
+
   const table = useReactTable({
-    data: transactions,
+    data: filteredTransactions,
     columns: transactionColumns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -145,16 +159,38 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
 
         <div className="flex items-center gap-2">
           {!hasSelection && (
-            <MultiSelectCombobox
-              placeholder="Filter categories"
-              options={categories.map((cat) => ({
-                value: cat.name,
-                label: formatCategoryPath(cat.name, categories.find(p => p.id === cat.parent_id)?.name) || cat.name,
-                group: categories.find(p => p.id === cat.parent_id)?.name || "Top Level"
-              }))}
-              selected={(table.getColumn("category_name")?.getFilterValue() as string[]) || []}
-              onChange={(value) => table.getColumn("category_name")?.setFilterValue(value.length ? value : undefined)}
-            />
+            <>
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="All dates"
+              />
+              <MultiSelectCombobox
+                placeholder="Filter categories"
+                options={categories.map((cat) => ({
+                  value: cat.name,
+                  label: formatCategoryPath(cat.name, categories.find(p => p.id === cat.parent_id)?.name) || cat.name,
+                  group: categories.find(p => p.id === cat.parent_id)?.name || "Top Level"
+                }))}
+                selected={(table.getColumn("category_name")?.getFilterValue() as string[]) || []}
+                onChange={(value) => table.getColumn("category_name")?.setFilterValue(value.length ? value : undefined)}
+              />
+              {(dateRange?.from || globalFilter || (table.getColumn("category_name")?.getFilterValue() as string[])?.length) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-muted-foreground"
+                  onClick={() => {
+                    setDateRange(undefined);
+                    setGlobalFilter("");
+                    table.getColumn("category_name")?.setFilterValue(undefined);
+                  }}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </>
           )}
         </div>
 
@@ -312,16 +348,17 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
 function SelectRowsPerPage({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const options = [10, 20, 30, 40, 50, 100];
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="h-8 w-[70px] rounded-md border border-input bg-transparent px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      {options.map((opt) => (
-        <option key={opt} value={opt} className="bg-popover text-popover-foreground">
-          {opt}
-        </option>
-      ))}
-    </select>
+    <Select value={value.toString()} onValueChange={(v) => onChange(Number(v))}>
+      <SelectTrigger className="h-8 w-[70px]">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((opt) => (
+          <SelectItem key={opt} value={opt.toString()}>
+            {opt}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

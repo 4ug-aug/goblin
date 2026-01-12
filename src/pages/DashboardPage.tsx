@@ -2,9 +2,10 @@ import { Donut } from "@/components/charts/donut";
 import { StackedBar } from "@/components/charts/stacked-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiSectionCard } from "@/components/ui/multi-section";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type SpendingByCategory, type Subscription, type TransactionWithCategory } from "@/lib/api";
 import { formatAmount, formatCurrency } from "@/lib/format";
-import { addDays, format, startOfToday, subMonths } from "date-fns";
+import { addDays, format, startOfToday, subDays, subMonths, subYears } from "date-fns";
 import { CalendarCheck, Repeat, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -26,6 +27,7 @@ export function DashboardPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [donutPeriod, setDonutPeriod] = useState<"week" | "month" | "year" | "all">("month");
 
   // Date range: 3 months back to 3 days ahead
   const today = startOfToday();
@@ -95,15 +97,23 @@ export function DashboardPage() {
     loadDashboardData();
   }, [startDateStr, endDateStr]);
 
-  // Aggregate daily data for StackedBar
+  // Aggregate daily data for StackedBar with top transactions
+  interface DailyDataItem {
+    date: string;
+    income: number;
+    expenses: number;
+    topExpenses: { payee: string; amount: number }[];
+    topIncome: { payee: string; amount: number }[];
+  }
+
   const dailyData = useMemo(() => {
-    const days: Record<string, { date: string; income: number; expenses: number }> = {};
+    const days: Record<string, DailyDataItem> = {};
     
     // Initialize all days in range
     let current = startDate;
     while (current <= endDate) {
       const dStr = format(current, "yyyy-MM-dd");
-      days[dStr] = { date: dStr, income: 0, expenses: 0 };
+      days[dStr] = { date: dStr, income: 0, expenses: 0, topExpenses: [], topIncome: [] };
       current = addDays(current, 1);
     }
 
@@ -113,10 +123,18 @@ export function DashboardPage() {
       if (days[dStr]) {
         if (tx.amount > 0) {
           days[dStr].income += tx.amount / 100;
+          days[dStr].topIncome.push({ payee: tx.payee, amount: tx.amount / 100 });
         } else {
           days[dStr].expenses += Math.abs(tx.amount) / 100;
+          days[dStr].topExpenses.push({ payee: tx.payee, amount: Math.abs(tx.amount) / 100 });
         }
       }
+    });
+
+    // Sort and limit top transactions per day
+    Object.values(days).forEach(day => {
+      day.topExpenses = day.topExpenses.sort((a, b) => b.amount - a.amount).slice(0, 5);
+      day.topIncome = day.topIncome.sort((a, b) => b.amount - a.amount).slice(0, 5);
     });
 
     return Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
@@ -131,20 +149,69 @@ export function DashboardPage() {
       "var(--chart-5)",
     ];
 
-    return spendingByCategory
+    // Filter transactions by selected period
+    const now = startOfToday();
+    let periodStart: Date;
+    switch (donutPeriod) {
+      case "week":
+        periodStart = subDays(now, 7);
+        break;
+      case "month":
+        periodStart = subMonths(now, 1);
+        break;
+      case "year":
+        periodStart = subYears(now, 1);
+        break;
+      case "all":
+      default:
+        periodStart = new Date(0);
+    }
+    const periodStartStr = format(periodStart, "yyyy-MM-dd");
+
+    // Calculate spending by category for the period
+    const periodSpending: Record<string, number> = {};
+    transactions
+      .filter(tx => tx.amount < 0 && tx.date >= periodStartStr)
+      .forEach(tx => {
+        const cat = tx.category_name || "Uncategorized";
+        periodSpending[cat] = (periodSpending[cat] || 0) + Math.abs(tx.amount);
+      });
+
+    return Object.entries(periodSpending)
       .map(([label, value], i) => ({
         key: label,
         label,
-        value: Math.abs(value) / 100,
+        value: value / 100,
         colorVar: colors[i % colors.length]
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [spendingByCategory]);
+  }, [transactions, donutPeriod]);
 
   const totalSpentInPeriod = useMemo(() => 
     donutData.reduce((acc, curr) => acc + curr.value, 0),
   [donutData]);
+
+  // Get formatted date range for the donut period
+  const donutPeriodLabel = useMemo(() => {
+    const now = startOfToday();
+    let start: Date;
+    switch (donutPeriod) {
+      case "week":
+        start = subDays(now, 7);
+        break;
+      case "month":
+        start = subMonths(now, 1);
+        break;
+      case "year":
+        start = subYears(now, 1);
+        break;
+      case "all":
+      default:
+        return "";
+    }
+    return `${format(start, "MMM d")} – ${format(now, "MMM d")}`;
+  }, [donutPeriod]);
 
   const currentMonthSpending = useMemo(() => {
     const thisMonth = format(today, "yyyy-MM");
@@ -182,6 +249,55 @@ export function DashboardPage() {
       .slice(0, 4);
   }, [subscriptions]);
 
+  // Custom tooltip for cash flow chart
+  const CashFlowTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: DailyDataItem }>; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    
+    const data = payload[0].payload;
+    const dateLabel = label ? new Date(label).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+    
+    return (
+      <div className="rounded-lg border bg-background p-3 shadow-lg min-w-[200px]">
+        <p className="font-medium text-sm mb-2">{dateLabel}</p>
+        
+        <div className="flex gap-4 mb-3 text-sm">
+          <div>
+            <span className="text-muted-foreground">Income: </span>
+            <span className="text-income font-medium">{formatAmount(data.income * 100)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Expenses: </span>
+            <span className="text-expense font-medium">{formatAmount(data.expenses * 100)}</span>
+          </div>
+        </div>
+
+        {data.topExpenses.length > 0 && (
+          <div className="mb-2">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Top Expenses</p>
+            {data.topExpenses.map((tx, i) => (
+              <div key={i} className="flex justify-between text-xs py-0.5">
+                <span className="truncate max-w-[130px]">{tx.payee}</span>
+                <span className="text-expense">{formatAmount(tx.amount * 100)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {data.topIncome.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Top Income</p>
+            {data.topIncome.map((tx, i) => (
+              <div key={i} className="flex justify-between text-xs py-0.5">
+                <span className="truncate max-w-[130px]">{tx.payee}</span>
+                <span className="text-income">{formatAmount(tx.amount * 100)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const sections = [
     {
       title: "Cash Flow Trend",
@@ -191,118 +307,50 @@ export function DashboardPage() {
         <StackedBar
           data={dailyData}
           config={trendConfig}
-          height={240}
+          height={280}
           todayDate={todayStr}
           yAxisFormatter={(val) => `${val}`}
+          customTooltip={<CashFlowTooltip />}
         />
       ),
     },
     {
       title: "Category Breakdown",
-      subtitle: "Top spending by category",
+      subtitle: donutPeriod === "all" ? "All time" : `Past ${donutPeriod}`,
       colSpan: 1 as const,
-      content: (
-        <Donut
-          total={totalSpentInPeriod}
-          subtitle="Total Spent"
-          data={donutData}
-          valueFormatter={(val) => formatAmount(val * 100, false)}
-        />
+      headerAction: (
+        <div className="flex items-center gap-2">
+          {donutPeriodLabel && (
+            <span className="text-xs text-muted-foreground">{donutPeriodLabel}</span>
+          )}
+          <Select value={donutPeriod} onValueChange={(v) => setDonutPeriod(v as typeof donutPeriod)}>
+            <SelectTrigger className="w-[100px] h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="week">Week</SelectItem>
+              <SelectItem value="month">Month</SelectItem>
+              <SelectItem value="year">Year</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       ),
-    },
-  ];
-
-  if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
-  }
-
-  return (
-    <div className="space-y-6">
-      <MultiSectionCard sections={sections} />
-
-      {/* KPI Cards Row */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Balance
-            </CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono-numbers">
-              {formatAmount(totalBalance)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Current balance across {accounts.length} accounts
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Monthly Spending
-            </CardTitle>
-            <TrendingDown className="h-4 w-4 text-expense" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono-numbers text-expense">
-              {formatAmount(currentMonthSpending)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-               This month's expenses
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Monthly Income
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-income" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono-numbers text-income">
-              {formatAmount(currentMonthIncome)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-               This month's income
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Subscriptions Row */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Monthly Subscriptions
-            </CardTitle>
-            <Repeat className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono-numbers text-expense">
-              {formatCurrency(monthlySubscriptionCost)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {subscriptions.length} active subscriptions
-            </p>
-          </CardContent>
-        </Card>
-
-        {upcomingCharges.length > 0 && (
-          <Card className="md:col-span-3">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <CalendarCheck className="h-4 w-4" />
-                Upcoming Charges
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-2 md:grid-cols-4">
+      content: (
+        <div className="space-y-4">
+          <Donut
+            total={totalSpentInPeriod}
+            subtitle="Total Spent"
+            data={donutData}
+            valueFormatter={(val) => formatAmount(val * 100, false)}
+          />
+          {upcomingCharges.length > 0 && (
+            <div className="pt-4 border-t">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Upcoming Charges</span>
+              </div>
+              <div className="space-y-2 max-h-[180px] overflow-y-auto">
                 {upcomingCharges.map((sub, i) => (
                   <div key={i} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                     <div className="truncate">
@@ -317,10 +365,79 @@ export function DashboardPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  if (loading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* KPI Cards Row - Compact */}
+      <div className="grid gap-3 md:grid-cols-4">
+        <Card className="py-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Total Balance
+            </CardTitle>
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="px-4 py-1">
+            <div className="text-xl font-bold font-mono-numbers">
+              {formatAmount(totalBalance)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="py-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Monthly Spending
+            </CardTitle>
+            <TrendingDown className="h-3.5 w-3.5 text-expense" />
+          </CardHeader>
+          <CardContent className="px-4 py-1">
+            <div className="text-xl font-bold font-mono-numbers text-expense">
+              {formatAmount(currentMonthSpending)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="py-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Monthly Income
+            </CardTitle>
+            <TrendingUp className="h-3.5 w-3.5 text-income" />
+          </CardHeader>
+          <CardContent className="px-4 py-1">
+            <div className="text-xl font-bold font-mono-numbers text-income">
+              {formatAmount(currentMonthIncome)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="py-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-1">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
+              Subscriptions
+            </CardTitle>
+            <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="px-4 py-1">
+            <div className="text-xl font-bold font-mono-numbers text-expense">
+              {formatCurrency(monthlySubscriptionCost)}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      <MultiSectionCard sections={sections} />
     </div>
   );
 }

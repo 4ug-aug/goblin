@@ -6,6 +6,7 @@ type Section = {
     title: string;
     colSpan?: 1 | 2 | 3;
     subtitle?: string;
+    headerAction?: React.ReactNode;
     action?: {
         label: string;
         onClick: () => void;
@@ -32,23 +33,26 @@ export function MultiSectionCard({ sections = [], className }: { sections: Secti
                     getColSpanClass(section.colSpan)
                 )}
               >
-                <div className="mb-3 flex flex-col items-start justify-between">
-                  <h3 className="text-base font-semibold tracking-tight">
-                    {section.title}
-                  </h3>
-                  {section.subtitle && (
-                    <p className="text-xs sm:text-sm text-muted-foreground">{section.subtitle}</p>
-                  )}
-                  {section.action && (
-                    <button
-                      type="button"
-                      onClick={section.action.onClick}
-                      className="text-xs sm:text-sm text-muted-foreground hover:underline inline-flex items-center gap-1"
-                    >
-                      {section.action.label}
-                      <ChevronRight className="h-4 w-4" aria-hidden />
-                    </button>
-                  )}
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="flex flex-col items-start">
+                    <h3 className="text-base font-semibold tracking-tight">
+                      {section.title}
+                    </h3>
+                    {section.subtitle && (
+                      <p className="text-xs sm:text-sm text-muted-foreground">{section.subtitle}</p>
+                    )}
+                    {section.action && (
+                      <button
+                        type="button"
+                        onClick={section.action.onClick}
+                        className="text-xs sm:text-sm text-muted-foreground hover:underline inline-flex items-center gap-1"
+                      >
+                        {section.action.label}
+                        <ChevronRight className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                  {section.headerAction && section.headerAction}
                 </div>
                 <div className="space-y-3">{section.content}</div>
               </div>

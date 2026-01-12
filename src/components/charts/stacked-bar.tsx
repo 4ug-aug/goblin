@@ -21,6 +21,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import type { ContentType } from "recharts/types/component/Tooltip"
 
 export interface FilterOption {
   value: string
@@ -44,6 +45,8 @@ interface StackedBarProps {
   ticks?: number[]
   todayDate?: string
   filters?: FilterConfig[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customTooltip?: ContentType<any, any>
 }
 
 export function StackedBar({
@@ -56,6 +59,7 @@ export function StackedBar({
   ticks,
   todayDate,
   filters,
+  customTooltip,
 }: StackedBarProps) {
   return (
     <div className="w-full">
@@ -125,15 +129,17 @@ export function StackedBar({
           />
           <ChartTooltip
             content={
-              <ChartTooltipContent
-                labelFormatter={(value) => {
-                  return new Date(value).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                }}
-              />
+              customTooltip ? customTooltip : (
+                <ChartTooltipContent
+                  labelFormatter={(value) => {
+                    return new Date(value).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  }}
+                />
+              )
             }
           />
           <ChartLegend content={<ChartLegendContent />} />
