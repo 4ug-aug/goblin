@@ -23,6 +23,7 @@ const trendConfig = {
 export function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
+  const [allTransactions, setAllTransactions] = useState<TransactionWithCategory[]>([]);
   const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
@@ -97,6 +98,27 @@ export function DashboardPage() {
     loadDashboardData();
   }, [startDateStr, endDateStr]);
 
+  // Load all transactions when "all" period is selected for the donut chart
+  useEffect(() => {
+    async function loadAllTransactions() {
+      if (donutPeriod !== "all" || accounts.length === 0) return;
+      
+      try {
+        const allTxs: TransactionWithCategory[] = [];
+        for (const acc of accounts) {
+          if (acc.id !== null) {
+            const txs = await getTransactions(acc.id);
+            allTxs.push(...txs);
+          }
+        }
+        setAllTransactions(allTxs);
+      } catch (error) {
+        console.error("Failed to load all transactions:", error);
+      }
+    }
+    loadAllTransactions();
+  }, [donutPeriod, accounts]);
+
   // Aggregate daily data for StackedBar with top transactions
   interface DailyDataItem {
     date: string;
@@ -169,9 +191,11 @@ export function DashboardPage() {
     const periodStartStr = format(periodStart, "yyyy-MM-dd");
 
     // Calculate spending by category for the period
+    // Use allTransactions for 'all' period, otherwise use filtered transactions
+    const txSource = donutPeriod === "all" ? allTransactions : transactions;
     const periodSpending: Record<string, number> = {};
-    transactions
-      .filter(tx => tx.amount < 0 && tx.date >= periodStartStr)
+    txSource
+      .filter(tx => tx.amount < 0 && (donutPeriod === "all" || tx.date >= periodStartStr))
       .forEach(tx => {
         const cat = tx.category_name || "Uncategorized";
         periodSpending[cat] = (periodSpending[cat] || 0) + Math.abs(tx.amount);
@@ -186,7 +210,7 @@ export function DashboardPage() {
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [transactions, donutPeriod]);
+  }, [transactions, allTransactions, donutPeriod]);
 
   const totalSpentInPeriod = useMemo(() => 
     donutData.reduce((acc, curr) => acc + curr.value, 0),

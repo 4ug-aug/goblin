@@ -3,13 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    detectSubscriptions,
-    dismissSubscription,
-    getAccounts,
-    getSubscriptions,
-    saveSubscription,
-    type Account,
-    type Subscription,
+  detectSubscriptions,
+  dismissSubscription,
+  getAccounts,
+  getSubscriptions,
+  saveSubscription,
+  type Account,
+  type Subscription,
 } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { CalendarCheck, Repeat, Sparkles, X } from "lucide-react";
@@ -141,9 +141,9 @@ export function SubscriptionsPage() {
             selectedAccountId={selectedAccountId}
             onSelect={setSelectedAccountId}
           />
-          <Button onClick={handleDetect} disabled={detecting || !selectedAccountId} variant="outline" className="gap-2">
+          <Button onClick={handleDetect} loading={detecting} disabled={!selectedAccountId} variant="outline" className="gap-2">
             <Sparkles className="h-4 w-4" />
-            {detecting ? "Detecting..." : "Detect"}
+            Detect
           </Button>
         </div>
       </div>
@@ -238,7 +238,7 @@ export function SubscriptionsPage() {
             <p className="text-muted-foreground text-center max-w-sm mb-6">
               Click "Detect" to analyze your transactions and find recurring payments like Netflix, Spotify, or your gym membership.
             </p>
-            <Button onClick={handleDetect} disabled={detecting || !selectedAccountId} className="gap-2">
+            <Button onClick={handleDetect} loading={detecting} disabled={!selectedAccountId} className="gap-2">
               <Sparkles className="h-4 w-4" />
               Detect Subscriptions
             </Button>
