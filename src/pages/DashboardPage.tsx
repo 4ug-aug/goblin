@@ -5,7 +5,7 @@ import { MultiSectionCard } from "@/components/ui/multi-section";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type Subscription, type TransactionWithCategory } from "@/lib/api";
 import { formatAmount, formatCurrency } from "@/lib/format";
-import { addDays, format, startOfToday, subDays, subMonths, subYears } from "date-fns";
+import { addDays, format, startOfMonth, startOfToday, startOfYear, subDays, subMonths, subYears } from "date-fns";
 import { CalendarCheck, Repeat, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -28,7 +28,7 @@ export function DashboardPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [donutPeriod, setDonutPeriod] = useState<"week" | "month" | "year" | "all">("month");
+  const [donutPeriod, setDonutPeriod] = useState<"week" | "month" | "year" | "thisMonth" | "thisYear" | "all">("thisMonth");
 
   // Date range: 3 months back to 3 days ahead
   const today = startOfToday();
@@ -101,7 +101,7 @@ export function DashboardPage() {
   // Load all transactions when "all" period is selected for the donut chart
   useEffect(() => {
     async function loadAllTransactions() {
-      if (donutPeriod !== "all" || accounts.length === 0) return;
+      if ((donutPeriod !== "all" && donutPeriod !== "thisYear") || accounts.length === 0) return;
       
       try {
         const allTxs: TransactionWithCategory[] = [];
@@ -184,6 +184,12 @@ export function DashboardPage() {
       case "year":
         periodStart = subYears(now, 1);
         break;
+      case "thisMonth":
+        periodStart = startOfMonth(now);
+        break;
+      case "thisYear":
+        periodStart = startOfYear(now);
+        break;
       case "all":
       default:
         periodStart = new Date(0);
@@ -192,7 +198,7 @@ export function DashboardPage() {
 
     // Calculate spending by category for the period
     // Use allTransactions for 'all' period, otherwise use filtered transactions
-    const txSource = donutPeriod === "all" ? allTransactions : transactions;
+    const txSource = (donutPeriod === "all" || donutPeriod === "thisYear") ? allTransactions : transactions;
     const periodSpending: Record<string, number> = {};
     txSource
       .filter(tx => tx.amount < 0 && (donutPeriod === "all" || tx.date >= periodStartStr))
@@ -201,20 +207,23 @@ export function DashboardPage() {
         periodSpending[cat] = (periodSpending[cat] || 0) + Math.abs(tx.amount);
       });
 
-    return Object.entries(periodSpending)
+    const allCategories = Object.entries(periodSpending)
       .map(([label, value], i) => ({
         key: label,
         label,
         value: value / 100,
         colorVar: colors[i % colors.length]
       }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
+      .sort((a, b) => b.value - a.value);
+
+    const totalSpent = allCategories.reduce((acc, curr) => acc + curr.value, 0);
+    const topCategories = allCategories.slice(0, 5);
+
+    return { totalSpent, topCategories };
   }, [transactions, allTransactions, donutPeriod]);
 
-  const totalSpentInPeriod = useMemo(() => 
-    donutData.reduce((acc, curr) => acc + curr.value, 0),
-  [donutData]);
+  const totalSpentInPeriod = donutData.totalSpent;
+  const donutChartData = donutData.topCategories;
 
   // Get formatted date range for the donut period
   const donutPeriodLabel = useMemo(() => {
@@ -223,18 +232,21 @@ export function DashboardPage() {
     switch (donutPeriod) {
       case "week":
         start = subDays(now, 7);
-        break;
+        return `${format(start, "MMM d")} – ${format(now, "MMM d")}`;
       case "month":
         start = subMonths(now, 1);
-        break;
+        return `${format(start, "MMM d")} – ${format(now, "MMM d")}`;
       case "year":
         start = subYears(now, 1);
-        break;
+        return `${format(start, "MMM d, yyyy")} – ${format(now, "MMM d, yyyy")}`;
+      case "thisMonth":
+        return format(now, "MMMM yyyy");
+      case "thisYear":
+        return format(now, "yyyy");
       case "all":
       default:
         return "";
     }
-    return `${format(start, "MMM d")} – ${format(now, "MMM d")}`;
   }, [donutPeriod]);
 
   const currentMonthSpending = useMemo(() => {
@@ -340,21 +352,20 @@ export function DashboardPage() {
     },
     {
       title: "Category Breakdown",
-      subtitle: donutPeriod === "all" ? "All time" : `Past ${donutPeriod}`,
+      subtitle: donutPeriodLabel || "All time",
       colSpan: 1 as const,
       headerAction: (
         <div className="flex items-center gap-2">
-          {donutPeriodLabel && (
-            <span className="text-xs text-muted-foreground">{donutPeriodLabel}</span>
-          )}
           <Select value={donutPeriod} onValueChange={(v) => setDonutPeriod(v as typeof donutPeriod)}>
-            <SelectTrigger className="w-[100px] h-7 text-xs">
+            <SelectTrigger className="w-[120px] h-7 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="week">Week</SelectItem>
-              <SelectItem value="month">Month</SelectItem>
-              <SelectItem value="year">Year</SelectItem>
+              <SelectItem value="thisMonth">This month</SelectItem>
+              <SelectItem value="thisYear">This year</SelectItem>
+              <SelectItem value="week">Past week</SelectItem>
+              <SelectItem value="month">Past month</SelectItem>
+              <SelectItem value="year">Past year</SelectItem>
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
@@ -365,7 +376,7 @@ export function DashboardPage() {
           <Donut
             total={totalSpentInPeriod}
             subtitle="Total Spent"
-            data={donutData}
+            data={donutChartData}
             valueFormatter={(val) => formatAmount(val * 100, false)}
           />
           {upcomingCharges.length > 0 && (
