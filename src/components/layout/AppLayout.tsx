@@ -6,6 +6,7 @@ import { TopBar } from "./TopBar";
 
 // Pages
 import { AccountsPage } from "@/pages/AccountsPage";
+import { BudgetsPage } from "@/pages/BudgetsPage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { SubscriptionsPage } from "@/pages/SubscriptionsPage";
@@ -20,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/accounts": "Accounts",
   "/subscriptions": "Subscriptions",
   "/categories": "Categories",
+  "/budgets": "Budgets",
 };
 
 export function AppLayout() {
@@ -40,10 +42,10 @@ export function AppLayout() {
         e.preventDefault();
         setImportDialogOpen(true);
       }
-      // Cmd+1-5: Navigate
-      if (e.metaKey && ["1", "2", "3", "4", "5"].includes(e.key)) {
+      // Cmd+1-6: Navigate
+      if (e.metaKey && ["1", "2", "3", "4", "5", "6"].includes(e.key)) {
         e.preventDefault();
-        const paths = ["/", "/transactions", "/accounts", "/subscriptions", "/categories"];
+        const paths = ["/", "/transactions", "/accounts", "/subscriptions", "/categories", "/budgets"];
         setCurrentPath(paths[parseInt(e.key) - 1]);
       }
     };
@@ -72,6 +74,8 @@ export function AppLayout() {
         return <SubscriptionsPage />;
       case "/categories":
         return <CategoriesPage />;
+      case "/budgets":
+        return <BudgetsPage />;
       default:
         return <DashboardPage />;
     }

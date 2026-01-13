@@ -6,6 +6,8 @@ pub mod transactions;
 pub mod import;
 pub mod subscriptions;
 pub mod subscription_engine;
+pub mod budgets;
+pub mod income_streams;
 
 use rusqlite::Connection;
 use std::path::PathBuf;

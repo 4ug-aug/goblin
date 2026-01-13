@@ -81,3 +81,37 @@ pub struct Subscription {
     #[serde(default)]
     pub transaction_ids: Vec<i64>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Budget {
+    pub id: Option<i64>,
+    pub name: String,
+    pub color: String,
+    pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetAllocation {
+    pub id: Option<i64>,
+    pub budget_id: i64,
+    pub month: String,  // YYYY-MM format
+    pub allocated_amount: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetWithSpending {
+    pub budget: Budget,
+    pub category_ids: Vec<i64>,
+    pub allocated_amount: i64,
+    pub spent_amount: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncomeStream {
+    pub id: Option<i64>,
+    pub name: String,
+    pub expected_amount: i64,
+    pub frequency: String,
+    pub category_id: Option<i64>,
+    pub is_active: bool,
+}

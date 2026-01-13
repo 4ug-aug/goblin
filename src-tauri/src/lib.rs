@@ -1,7 +1,7 @@
 mod db;
 
-use db::models::{Account, Category, ImportResult, TransactionWithCategory, Subscription};
-use db::{accounts, categories, import, transactions, subscriptions, subscription_engine, Database};
+use db::models::{Account, Category, ImportResult, TransactionWithCategory, Subscription, Budget, BudgetAllocation, BudgetWithSpending, IncomeStream};
+use db::{accounts, categories, import, transactions, subscriptions, subscription_engine, budgets, income_streams, Database};
 use tauri::{Manager, State};
 
 // === Account Commands ===
@@ -187,6 +187,86 @@ fn dismiss_subscription(db: State<Database>, id: i64) -> Result<usize, String> {
     subscriptions::dismiss(&conn, id).map_err(|e| e.to_string())
 }
 
+// === Budget Commands ===
+
+#[tauri::command]
+fn create_budget(db: State<Database>, budget: Budget) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::create(&conn, &budget).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_budgets(db: State<Database>) -> Result<Vec<Budget>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::get_all(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_budget(db: State<Database>, budget: Budget) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::update(&conn, &budget).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_budget(db: State<Database>, id: i64) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::delete(&conn, id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_budget_categories(db: State<Database>, budget_id: i64, category_ids: Vec<i64>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::remove_all_categories(&conn, budget_id).map_err(|e| e.to_string())?;
+    for cat_id in category_ids {
+        budgets::add_category(&conn, budget_id, cat_id).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_budget_categories(db: State<Database>, budget_id: i64) -> Result<Vec<i64>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::get_categories(&conn, budget_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_budget_allocation(db: State<Database>, budget_id: i64, month: String, amount: i64) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::set_allocation(&conn, budget_id, &month, amount).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_budgets_with_spending(db: State<Database>, month: String) -> Result<Vec<BudgetWithSpending>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    budgets::get_budgets_with_spending(&conn, &month).map_err(|e| e.to_string())
+}
+
+// === Income Stream Commands ===
+
+#[tauri::command]
+fn create_income_stream(db: State<Database>, stream: IncomeStream) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    income_streams::create(&conn, &stream).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_income_streams(db: State<Database>) -> Result<Vec<IncomeStream>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    income_streams::get_all(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_income_stream(db: State<Database>, stream: IncomeStream) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    income_streams::update(&conn, &stream).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_income_stream(db: State<Database>, id: i64) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    income_streams::delete(&conn, id).map_err(|e| e.to_string())
+}
+
 // === App Entry Point ===
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -230,6 +310,20 @@ pub fn run() {
             get_subscriptions,
             save_subscription,
             dismiss_subscription,
+            // Budgets
+            create_budget,
+            get_budgets,
+            update_budget,
+            delete_budget,
+            set_budget_categories,
+            get_budget_categories,
+            set_budget_allocation,
+            get_budgets_with_spending,
+            // Income Streams
+            create_income_stream,
+            get_income_streams,
+            update_income_stream,
+            delete_income_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

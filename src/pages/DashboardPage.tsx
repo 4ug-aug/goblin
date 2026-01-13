@@ -2,11 +2,23 @@ import { Donut } from "@/components/charts/donut";
 import { StackedBar } from "@/components/charts/stacked-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiSectionCard } from "@/components/ui/multi-section";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type Subscription, type TransactionWithCategory } from "@/lib/api";
+import {
+  getAccounts,
+  getBudgetsWithSpending,
+  getSpendingByCategory,
+  getSubscriptions,
+  getTransactions,
+  getTransactionsByDateRange,
+  type Account,
+  type BudgetWithSpending,
+  type Subscription,
+  type TransactionWithCategory
+} from "@/lib/api";
 import { formatAmount, formatCurrency } from "@/lib/format";
 import { addDays, format, startOfMonth, startOfToday, startOfYear, subDays, subMonths, subYears } from "date-fns";
-import { CalendarCheck, Repeat, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { CalendarCheck, Repeat, Target, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const trendConfig = {
@@ -26,6 +38,7 @@ export function DashboardPage() {
   const [allTransactions, setAllTransactions] = useState<TransactionWithCategory[]>([]);
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [budgets, setBudgets] = useState<BudgetWithSpending[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [donutPeriod, setDonutPeriod] = useState<"week" | "month" | "year" | "thisMonth" | "thisYear" | "all">("thisMonth");
@@ -88,6 +101,11 @@ export function DashboardPage() {
             }
           }
           setSubscriptions(allSubs);
+
+          // Build budget status
+          const currentMonthStr = format(new Date(), "yyyy-MM");
+          const budgetData = await getBudgetsWithSpending(currentMonthStr);
+          setBudgets(budgetData);
         }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
@@ -402,6 +420,50 @@ export function DashboardPage() {
               </div>
             </div>
           )}
+        </div>
+      ),
+    },
+    {
+      title: "Budget Status",
+      subtitle: format(new Date(), "MMMM yyyy"),
+      colSpan: 1 as const,
+      content: (
+        <div className="space-y-6">
+          {budgets.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-8 text-center bg-muted/20 rounded-lg border border-dashed">
+             <Target className="h-8 w-8 text-muted-foreground/30 mb-2" />
+             <p className="text-xs text-muted-foreground">No budgets set up for this month.</p>
+           </div>
+          ) : (
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+              {budgets.map((b) => {
+                const percent = b.allocated_amount > 0 ? Math.min(100, (b.spent_amount / b.allocated_amount) * 100) : 0;
+                const isOverBudget = b.spent_amount > b.allocated_amount;
+                return (
+                  <div key={b.budget.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: b.budget.color }} />
+                        <span className="font-medium">{b.budget.name}</span>
+                      </div>
+                      <span className="text-muted-foreground font-mono-numbers">
+                        {formatAmount(b.spent_amount)} / {formatAmount(b.allocated_amount)}
+                      </span>
+                    </div>
+                    <Progress value={percent} className={`h-1.5 ${isOverBudget ? "[&>div]:bg-destructive" : ""}`} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="pt-4 border-t">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Total Budgeted</span>
+              <span className="font-bold font-mono-numbers">
+                {formatAmount(budgets.reduce((acc, b) => acc + b.allocated_amount, 0))}
+              </span>
+            </div>
+          </div>
         </div>
       ),
     },

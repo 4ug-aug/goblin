@@ -14,6 +14,7 @@ import {
   Receipt,
   Repeat,
   Tags,
+  Target,
   Upload,
   Wallet,
   type LucideIcon,
@@ -56,6 +57,12 @@ const mainNav: NavItem[] = [
     icon: Tags,
     href: "/categories",
     shortcut: "⌘5",
+  },
+  {
+    title: "Budgets",
+    icon: Target,
+    href: "/budgets",
+    shortcut: "⌘6",
   },
 ];
 

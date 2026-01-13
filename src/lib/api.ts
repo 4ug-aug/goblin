@@ -213,3 +213,85 @@ export async function dismissSubscription(id: number): Promise<number> {
   return invoke<number>("dismiss_subscription", { id });
 }
 
+// ===== Budget API =====
+
+export interface Budget {
+  id: number | null;
+  name: string;
+  color: string;
+  icon: string | null;
+}
+
+export interface BudgetAllocation {
+  id: number | null;
+  budget_id: number;
+  month: string;
+  allocated_amount: number;
+}
+
+export interface BudgetWithSpending {
+  budget: Budget;
+  category_ids: number[];
+  allocated_amount: number;
+  spent_amount: number;
+}
+
+export async function createBudget(budget: Omit<Budget, "id">): Promise<number> {
+  return invoke<number>("create_budget", { budget });
+}
+
+export async function getBudgets(): Promise<Budget[]> {
+  return invoke<Budget[]>("get_budgets");
+}
+
+export async function updateBudget(budget: Budget): Promise<number> {
+  return invoke<number>("update_budget", { budget });
+}
+
+export async function deleteBudget(id: number): Promise<number> {
+  return invoke<number>("delete_budget", { id });
+}
+
+export async function setBudgetCategories(budgetId: number, categoryIds: number[]): Promise<void> {
+  return invoke<void>("set_budget_categories", { budgetId, categoryIds });
+}
+
+export async function getBudgetCategories(budgetId: number): Promise<number[]> {
+  return invoke<number[]>("get_budget_categories", { budgetId });
+}
+
+export async function setBudgetAllocation(budgetId: number, month: string, amount: number): Promise<void> {
+  return invoke<void>("set_budget_allocation", { budgetId, month, amount });
+}
+
+export async function getBudgetsWithSpending(month: string): Promise<BudgetWithSpending[]> {
+  return invoke<BudgetWithSpending[]>("get_budgets_with_spending", { month });
+}
+
+// ===== Income Stream API =====
+
+export interface IncomeStream {
+  id: number | null;
+  name: string;
+  expected_amount: number;
+  frequency: string;
+  category_id: number | null;
+  is_active: boolean;
+}
+
+export async function createIncomeStream(stream: Omit<IncomeStream, "id">): Promise<number> {
+  return invoke<number>("create_income_stream", { stream });
+}
+
+export async function getIncomeStreams(): Promise<IncomeStream[]> {
+  return invoke<IncomeStream[]>("get_income_streams");
+}
+
+export async function updateIncomeStream(stream: IncomeStream): Promise<number> {
+  return invoke<number>("update_income_stream", { stream });
+}
+
+export async function deleteIncomeStream(id: number): Promise<number> {
+  return invoke<number>("delete_income_stream", { id });
+}
+
