@@ -130,6 +130,24 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
     }
   };
 
+  // Calculate summary totals from filtered rows (amounts are in øre, divide by 100 for DKK)
+  const summaryTotals = useMemo(() => {
+    const filteredRows = table.getFilteredRowModel().rows;
+    let totalSpending = 0;
+    let totalEarning = 0;
+    
+    filteredRows.forEach(row => {
+      const amount = row.original.amount;
+      if (amount < 0) {
+        totalSpending += Math.abs(amount);
+      } else {
+        totalEarning += amount;
+      }
+    });
+    
+    return { totalSpending: totalSpending / 100, totalEarning: totalEarning / 100 };
+  }, [table.getFilteredRowModel().rows]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -145,6 +163,22 @@ export function TransactionTable({ transactions, loading, onRefresh }: Transacti
 
   return (
     <div className="space-y-4 relative">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm font-medium text-muted-foreground">Total Earning</p>
+          <p className="text-2xl font-semibold text-emerald-500">
+            +{summaryTotals.totalEarning.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm font-medium text-muted-foreground">Total Spending</p>
+          <p className="text-2xl font-semibold text-rose-500">
+            -{summaryTotals.totalSpending.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.
+          </p>
+        </div>
+      </div>
+
       {/* Search & Bulk Actions */}
       <div className="flex items-center justify-start gap-2 h-9">
         <div className="relative flex-1 max-w-sm">

@@ -88,50 +88,49 @@ export function MultiSelectCombobox({
           </div>
         </PopoverTrigger>
         <PopoverContent className="w-[200px] p-0" align="start">
-          <Command onKeyDown={handleKeyDown}>
+          <Command onKeyDown={handleKeyDown} shouldFilter={true}>
             <CommandInput
               placeholder="Search..."
               value={inputValue}
               onValueChange={setInputValue}
             />
             <CommandList>
-              <CommandGroup>
-                {Object.entries(groupedOptions).map(([group, groupOptions]) => (
-                  <CommandGroup key={group} heading={group}>
-                    {groupOptions.map((option) => (
-                      <CommandItem
-                        key={option.value}
-                        onSelect={() => handleSelect(option.value)}
-                        className="cursor-pointer"
+              {Object.entries(groupedOptions).map(([group, groupOptions]) => (
+                <CommandGroup key={group} heading={group}>
+                  {groupOptions.map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={option.label}
+                      onSelect={() => handleSelect(option.value)}
+                      className="cursor-pointer"
+                    >
+                      <div
+                        className={cn(
+                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                          selected.includes(option.value)
+                            ? "bg-primary text-primary-foreground"
+                            : "opacity-50 [&_svg]:invisible"
+                        )}
                       >
-                        <div
-                          className={cn(
-                            "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                            selected.includes(option.value)
-                              ? "bg-primary text-primary-foreground"
-                              : "opacity-50 [&_svg]:invisible"
-                          )}
+                        <svg
+                          className={cn("h-3 w-3")}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="4"
                         >
-                          <svg
-                            className={cn("h-3 w-3")}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        </div>
-                        {option.label}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                ))}
-              </CommandGroup>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </div>
+                      {option.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
               {allowCustom && inputValue && !options.some(o => o.label.toLowerCase() === inputValue.toLowerCase()) && (
                 <CommandGroup heading="Add Custom">
                   <CommandItem
