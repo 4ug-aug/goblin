@@ -3,7 +3,7 @@ import { StackedBar } from "@/components/charts/stacked-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiSectionCard } from "@/components/ui/multi-section";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type SpendingByCategory, type Subscription, type TransactionWithCategory } from "@/lib/api";
+import { getAccounts, getSpendingByCategory, getSubscriptions, getTransactions, getTransactionsByDateRange, type Account, type Subscription, type TransactionWithCategory } from "@/lib/api";
 import { formatAmount, formatCurrency } from "@/lib/format";
 import { addDays, format, startOfToday, subDays, subMonths, subYears } from "date-fns";
 import { CalendarCheck, Repeat, TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -24,7 +24,7 @@ export function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<TransactionWithCategory[]>([]);
   const [allTransactions, setAllTransactions] = useState<TransactionWithCategory[]>([]);
-  const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory>([]);
+
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ export function DashboardPage() {
 
           setTransactions(allTxs);
           setTotalBalance(totalBal);
-          setSpendingByCategory(Object.entries(allSpendingByCat));
+
 
           // Load subscriptions for all accounts
           const allSubs: Subscription[] = [];
